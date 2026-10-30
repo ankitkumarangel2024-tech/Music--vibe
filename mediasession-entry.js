@@ -12,6 +12,11 @@ if (Capacitor.getPlatform() === 'android') {
   }
   let md = null, state = 'none';
   const quiet = p => { try { p && p.catch && p.catch(() => {}); } catch (e) {} };
+  // The native plugin crashes the whole app when artwork is a web address it cannot reach,
+  // so only small embedded (data:) images are passed on.
+  const embedded = list => Array.from(list || [])
+    .filter(a => a && typeof a.src === 'string' && a.src.indexOf('data:') === 0)
+    .map(a => ({ src: a.src, sizes: a.sizes, type: a.type }));
   const session = {
     get metadata() { return md; },
     set metadata(m) {
@@ -19,7 +24,7 @@ if (Capacitor.getPlatform() === 'android') {
       if (!m) return;
       quiet(MediaSession.setMetadata({
         title: m.title || '', artist: m.artist || '', album: m.album || '',
-        artwork: Array.from(m.artwork || []).map(a => ({ src: a.src, sizes: a.sizes, type: a.type }))
+        artwork: embedded(m.artwork)
       }));
     },
     get playbackState() { return state; },
@@ -28,6 +33,4 @@ if (Capacitor.getPlatform() === 'android') {
     setPositionState(s) { if (s) quiet(MediaSession.setPositionState(s)); }
   };
   try { Object.defineProperty(navigator, 'mediaSession', { value: session, configurable: true }); } catch (e) {}
-  // Android 13+ hides the playback notification until this is allowed
-  setTimeout(() => quiet(LocalNotifications.requestPermissions()), 1500);
 }
