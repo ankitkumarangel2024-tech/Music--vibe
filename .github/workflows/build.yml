@@ -34,12 +34,75 @@ jobs:
           mkdir -p www
           cp index.html icon-192.png icon-512.png icon-maskable-512.png www/
           grep -q mediasession.js www/index.html || sed -i 's|<body>|<body>\n<script src="mediasession.js"></script>|' www/index.html
+          sed -i '/requestPermissions/d' mediasession-entry.js
+          sed -i "s|set playbackState(s) { state = s;|set playbackState(s) { state = s; if (s === 'playing' \&\& !window.__np) { window.__np = 1; quiet(LocalNotifications.requestPermissions()); }|" mediasession-entry.js
           npx esbuild mediasession-entry.js --bundle --minify --outfile=www/mediasession.js
       - name: Create Android project
         run: |
           npx cap add android
           npx cap sync android
           python3 patch_android.py
+      - name: Add crash reporter and notification icon
+        run: |
+          APPID=$(python3 -c "import json;print(json.load(open('capacitor.config.json'))['appId'])")
+          DIR="android/app/src/main/java/$(echo $APPID | tr . /)"
+          mkdir -p "$DIR"
+          cat > "$DIR/CrashApp.java" <<'EOF'
+          package __PKG__;
+
+          import android.app.Application;
+          import android.content.ContentValues;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.provider.MediaStore;
+          import java.io.OutputStream;
+          import java.io.PrintWriter;
+          import java.io.StringWriter;
+
+          public class CrashApp extends Application {
+            @Override
+            public void onCreate() {
+              super.onCreate();
+              final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+              Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+                @Override
+                public void uncaughtException(Thread t, Throwable e) {
+                  try {
+                    StringWriter sw = new StringWriter();
+                    e.printStackTrace(new PrintWriter(sw));
+                    String text = "Music Vibe crash\nAndroid " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ") "
+                        + Build.MANUFACTURER + " " + Build.MODEL + "\nthread: " + t.getName() + "\n\n" + sw.toString();
+                    if (Build.VERSION.SDK_INT >= 29) {
+                      ContentValues v = new ContentValues();
+                      v.put(MediaStore.MediaColumns.DISPLAY_NAME, "musicvibe-crash-" + System.currentTimeMillis() + ".txt");
+                      v.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                      v.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download");
+                      Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                      if (u != null) {
+                        OutputStream o = getContentResolver().openOutputStream(u);
+                        o.write(text.getBytes("UTF-8"));
+                        o.close();
+                      }
+                    }
+                  } catch (Throwable x) {
+                  }
+                  if (prev != null) {
+                    prev.uncaughtException(t, e);
+                  }
+                }
+              });
+            }
+          }
+          EOF
+          sed -i "s/__PKG__/$APPID/" "$DIR/CrashApp.java"
+          sed -i 's|<application|<application android:name=".CrashApp"|' android/app/src/main/AndroidManifest.xml
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_baseline_volume_up_24.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+            <path android:fillColor="#FFFFFF" android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z"/>
+          </vector>
+          EOF
+          cat android/app/src/main/AndroidManifest.xml | head -20
       - name: Build APK
         working-directory: android
         run: ./gradlew assembleDebug
