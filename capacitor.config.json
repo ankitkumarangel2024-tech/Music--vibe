@@ -1,0 +1,8 @@
+{
+  "appId": "com.musicvibe.native",
+  "appName": "Music Vibe",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
