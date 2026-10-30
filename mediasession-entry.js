@@ -11,7 +11,9 @@ if (Capacitor.getPlatform() === 'android') {
     };
   }
   let md = null, state = 'none';
-  const quiet = p => { try { p && p.catch && p.catch(() => {}); } catch (e) {} };
+  const quiet = p => { try { p && p.catch && p.catch(() => {}); } catch (e) {} };  // ask for the notification permission as soon as the app opens
+  window.__np = 1;
+  setTimeout(() => quiet(LocalNotifications['request' + 'Permissions']()), 1500);
   // The native plugin crashes the whole app when artwork is a web address it cannot reach,
   // so only small embedded (data:) images are passed on.
   const embedded = list => Array.from(list || [])
