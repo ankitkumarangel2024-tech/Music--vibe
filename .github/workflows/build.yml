@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -17,20 +19,25 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - name: Install packages
+      - name: Prepare project files
         run: |
-          npm install
-          pip install pillow
-      - name: Fix file names
-        run: |
-          fix() { if [ ! -f "$1" ]; then src=$(ls -1 $2 2>/dev/null | head -n1); if [ -n "$src" ]; then cp "$src" "$1"; fi; fi; }
-          fix index.html 'index*.html'
-          fix icon-192.png 'icon-192*.png'
-          fix icon-512.png 'icon-512*.png'
-          fix icon-maskable-512.png 'icon-maskable-512*.png'
+          pick() { best=""; bt=-1; for f in $1; do [ -f "$f" ] || continue; t=$(git log -1 --format=%ct -- "$f" 2>/dev/null); t=${t:-0}; if [ "$t" -ge "$bt" ]; then best="$f"; bt=$t; fi; done; if [ -n "$best" ] && [ "$best" != "$2" ]; then cp "$best" "$2"; fi; }
+          pick 'index*.html' index.html
+          pick 'MainActivity*.java' MainActivity.java
+          pick 'MusicPlugin*.java' MusicPlugin.java
+          pick 'CrashApp*.java' CrashApp.java
+          pick 'patch_android*.py' patch_android.py
+          pick 'icon-192*.png' icon-192.png
+          pick 'icon-512*.png' icon-512.png
+          pick 'icon-maskable-512*.png' icon-maskable-512.png
           ls -la
-      - name: Prepare web files
+          for f in index.html MainActivity.java MusicPlugin.java CrashApp.java patch_android.py mediasession-entry.js package.json capacitor.config.json; do
+            if [ ! -f "$f" ]; then echo "MISSING FILE: $f"; exit 1; fi
+          done
+      - name: Install packages and build web files
         run: |
+          npm install || npm install
+          pip install pillow
           mkdir -p www
           cp index.html icon-192.png icon-512.png icon-maskable-512.png www/
           grep -q mediasession.js www/index.html || sed -i 's|<body>|<body>\n<script src="mediasession.js"></script>|' www/index.html
@@ -41,71 +48,18 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
-          python3 patch_android.py
-      - name: Add crash reporter and notification icon
+      - name: Add app code and patch
         run: |
           APPID=$(python3 -c "import json;print(json.load(open('capacitor.config.json'))['appId'])")
           DIR="android/app/src/main/java/$(echo $APPID | tr . /)"
           mkdir -p "$DIR"
-          cat > "$DIR/CrashApp.java" <<'EOF'
-          package __PKG__;
-
-          import android.app.Application;
-          import android.content.ContentValues;
-          import android.net.Uri;
-          import android.os.Build;
-          import android.provider.MediaStore;
-          import java.io.OutputStream;
-          import java.io.PrintWriter;
-          import java.io.StringWriter;
-
-          public class CrashApp extends Application {
-            @Override
-            public void onCreate() {
-              super.onCreate();
-              final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
-              Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-                @Override
-                public void uncaughtException(Thread t, Throwable e) {
-                  try {
-                    StringWriter sw = new StringWriter();
-                    e.printStackTrace(new PrintWriter(sw));
-                    String text = "Music Vibe crash\nAndroid " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ") "
-                        + Build.MANUFACTURER + " " + Build.MODEL + "\nthread: " + t.getName() + "\n\n" + sw.toString();
-                    if (Build.VERSION.SDK_INT >= 29) {
-                      ContentValues v = new ContentValues();
-                      v.put(MediaStore.MediaColumns.DISPLAY_NAME, "musicvibe-crash-" + System.currentTimeMillis() + ".txt");
-                      v.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
-                      v.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download");
-                      Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
-                      if (u != null) {
-                        OutputStream o = getContentResolver().openOutputStream(u);
-                        o.write(text.getBytes("UTF-8"));
-                        o.close();
-                      }
-                    }
-                  } catch (Throwable x) {
-                  }
-                  if (prev != null) {
-                    prev.uncaughtException(t, e);
-                  }
-                }
-              });
-            }
-          }
-          EOF
-          sed -i "s/__PKG__/$APPID/" "$DIR/CrashApp.java"
-          sed -i 's|<application|<application android:name=".CrashApp"|' android/app/src/main/AndroidManifest.xml
-          mkdir -p android/app/src/main/res/drawable
-          cat > android/app/src/main/res/drawable/ic_baseline_volume_up_24.xml <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-            <path android:fillColor="#FFFFFF" android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z"/>
-          </vector>
-          EOF
-          cat android/app/src/main/AndroidManifest.xml | head -20
+          cp MainActivity.java MusicPlugin.java CrashApp.java "$DIR/"
+          sed -i "s/__PKG__/$APPID/" "$DIR/MainActivity.java" "$DIR/MusicPlugin.java" "$DIR/CrashApp.java"
+          python3 patch_android.py
+          head -30 android/app/src/main/AndroidManifest.xml
       - name: Build APK
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug || ./gradlew assembleDebug || ./gradlew assembleDebug
       - name: Publish APK
         uses: softprops/action-gh-release@v2
         with:
