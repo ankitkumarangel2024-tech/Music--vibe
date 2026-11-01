@@ -11,7 +11,17 @@ add += '    <uses-permission android:name="android.permission.READ_EXTERNAL_STOR
 s = s.replace('<application', add + '    <application', 1)
 if 'android:name=".CrashApp"' not in s:
     s = s.replace('<application', '<application android:name=".CrashApp"', 1)
+if 'KillService' not in s:
+    s = s.replace('</application>', '        <service android:name=".MainActivity$KillService" android:exported="false" android:stopWithTask="false" />\n    </application>', 1)
 open(man, 'w', encoding='utf-8').write(s)
+import xml.dom.minidom
+try:
+    xml.dom.minidom.parse(man)
+except Exception as e:
+    print('MANIFEST BROKEN:', e)
+    print(s)
+    raise SystemExit(1)
+print(s)
 print('manifest ok')
 
 res = 'android/app/src/main/res'

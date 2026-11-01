@@ -1,6 +1,10 @@
 package __PKG__;
 
+import android.app.NotificationManager;
+import android.app.Service;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.IBinder;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.WebView;
@@ -13,6 +17,32 @@ public class MainActivity extends BridgeActivity {
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(MusicPlugin.class);
     super.onCreate(savedInstanceState);
+    try {
+      startService(new Intent(this, KillService.class));
+    } catch (Throwable t) {
+    }
+  }
+
+  /* when the app is swiped away from recents: remove the media notification and stop everything */
+  public static class KillService extends Service {
+    @Override
+    public IBinder onBind(Intent i) {
+      return null;
+    }
+
+    @Override
+    public int onStartCommand(Intent i, int flags, int startId) {
+      return START_NOT_STICKY;
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+      try {
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancelAll();
+      } catch (Throwable t) {
+      }
+      android.os.Process.killProcess(android.os.Process.myPid());
+    }
   }
 
   public String audioPermission() {
