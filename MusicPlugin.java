@@ -52,9 +52,13 @@ public class MusicPlugin extends Plugin {
           MediaStore.Audio.Media.DATA
       };
       c = getContext().getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj,
-          MediaStore.Audio.Media.IS_MUSIC + " != 0", null, MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC");
+          MediaStore.Audio.Media.IS_MUSIC + " != 0", null, null);
       if (c != null) {
         while (c.moveToNext()) {
+          String pth = c.getString(7);
+          if (pth != null && !new java.io.File(pth).exists()) {
+            continue;
+          }
           JSObject o = new JSObject();
           o.put("id", c.getLong(0));
           o.put("title", c.getString(1));

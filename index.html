@@ -15,7 +15,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;800&family=Unbounded:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;800&family=Unbounded:wght@500;700&display=swap" media="print" onload="this.media='all'">
 <style>
 /* Layout: one phone-width column. Colour orbs drift behind glass; the seek bar is a tank of water that sloshes; sheets rise from the bottom like droplets. */
 @property --pa{syntax:'<number>';inherits:false;initial-value:0}
@@ -96,8 +96,9 @@ html.playing .sheen::after{animation-play-state:running}
 .view{min-height:100%}
 
 /* ---- now playing ---- */
-#v-play{display:flex;flex-direction:column;align-items:center;gap:12px;padding-top:4px}
-.artbox{position:relative;width:min(64vw,38vh,300px);width:min(64vw,38dvh,300px);aspect-ratio:1;max-width:100%}
+#v-play{display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.5dvh,12px);padding-top:4px}
+.stage:has(#v-play:not([hidden])){overflow:hidden}
+.artbox{position:relative;width:min(64vw,300px);width:clamp(96px,calc(100dvh - 550px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)),min(64vw,300px));aspect-ratio:1;max-width:100%;flex:none}
 .art{
   width:100%;height:100%;padding:9px;border-radius:44% 56% 52% 48% / 50% 44% 56% 50%;
   animation:morph 14s ease-in-out infinite alternate;animation-play-state:paused;
@@ -288,6 +289,17 @@ html.lite .glass{-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 #chips::-webkit-scrollbar{display:none}
 #chips .chip2{flex:none}
 #chips .chip2 svg{width:16px;height:16px}
+/* ---- performance mode: no live theme, no blur, no animation ---- */
+.orbs{display:none!important}
+body{background:radial-gradient(120% 70% at 50% -10%,hsl(220 60% 22%),#0b0d17 70%)!important}
+*,*::before,*::after{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;animation:none!important;text-shadow:none!important}
+.glass{background:linear-gradient(140deg,rgba(255,255,255,.13),rgba(255,255,255,.05))!important;box-shadow:inset 1px 1px 0 rgba(255,255,255,.22)!important}
+.mark span{filter:none!important}
+.rw{box-shadow:none!important;contain:layout paint style}
+.rw.cur{box-shadow:inset 0 0 0 1px var(--glow)!important}
+.art img{box-shadow:none!important}
+.dock.glass{background:rgba(30,34,52,.92)!important}
+.sheet{background:rgba(20,23,38,.98)!important}
 </style>
 
 <div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -874,7 +886,7 @@ function frame(now){
   const dragging=sliders.some(x=>x.drag);
   const calm=!dragging&&!sliders.some(x=>x.amp>.5);
   const playingNow=isPlaying();
-  const gap=lite?66:33;
+  const gap=250;
   // while playing quietly, redraw at ~30fps (15fps in battery mode); touching or splashing goes full speed
   if(!playingNow||!calm||now-lastDraw>=gap){
     const sdt=Math.min(.1,Math.max(.001,(now-lastDraw)/1000));lastDraw=now;
@@ -943,7 +955,6 @@ async function playAt(q,autoplay){
   if(deckTrack[idle]===t.id){const old=audio;ad=idle;audio=decks[ad];if(old!==audio)old.pause()}
   else{audio.pause();loadInto(ad,t);audio.currentTime=0}
   deckTrack[1-ad]=deckTrack[1-ad]===t.id?null:deckTrack[1-ad];
-  hueTarget=t.hue;
   $('#ttl').textContent=t.title;$('#art-name').textContent=t.artist||'Unknown artist';
   $('#td').textContent=fmt(t.duration);$('#tc').textContent='0:00';seekL.setValue(0);
   const fm=$('#fmt');fm.hidden=false;fm.textContent=((t.file||'').split('.').pop()||'AUDIO').toUpperCase().slice(0,5);
@@ -1468,20 +1479,31 @@ function devTrack(o){
 }
 function applyDevice(list){
   const dev=list.filter(o=>!hid.has(2e9+o.id)).map(devTrack);
+  dev.sort((x,y)=>(x.title||'').localeCompare(y.title||''));
   tracks=tracks.filter(t=>!t.scan).concat(dev);
   byId=new Map(tracks.map(t=>[t.id,t]));
 }
+let scanSig='',scanBusy=false;
 async function scanDevice(){
-  const P=MN();if(!P)return false;
-  let r;try{r=await P.scan()}catch(e){return false}
+  const P=MN();if(!P||scanBusy)return false;
+  scanBusy=true;let r;
+  try{r=await P.scan()}catch(e){scanBusy=false;return false}
+  scanBusy=false;
   if(!r||!r.ok)return false;
   const list=r.list||[];
+  const sig=list.length+':'+list.reduce((a,o)=>(a*31+o.id)|0,7);
+  if(sig===scanSig)return true;
+  scanSig=sig;
   try{localStorage.setItem('jal.dev',JSON.stringify(list))}catch(e){}
   applyDevice(list);
-  renderChips();renderList();
+  const cur=curTrack();
+  if(qi>=0&&!cur){queue=queue.filter(id=>byId.has(id));baseOrder=baseOrder.filter(id=>byId.has(id));qi=queue.length?Math.min(qi,queue.length-1):-1;saveQueue()}
+  renderChips();if(view==='lib')renderList();else refresh();
   if(qi<0&&tracks.length){buildQueue(tracks.map(t=>t.id),tracks[0].id);qi=0;playAt(0,false)}
   return true;
 }
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)scanDevice()});
+setInterval(()=>{if(!document.hidden)scanDevice()},8000);
 window.__aperm=ok=>{if(ok)scanDevice();else denied=true};
 $('#allow').onclick=()=>{const P=MN();if(!P){toast('Open the app on your phone');return}if(denied){P.settings();return}P.scan().then(r=>{if(r&&r.ok)scanDevice()}).catch(()=>{})};
 decks.forEach((d,i)=>d.addEventListener('error',async()=>{
