@@ -12,11 +12,13 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
   static final int REQ_AUDIO = 7741;
+  static MainActivity inst;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(MusicPlugin.class);
     super.onCreate(savedInstanceState);
+    inst = this;
     try {
       startService(new Intent(this, KillService.class));
     } catch (Throwable t) {
@@ -38,10 +40,21 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onTaskRemoved(Intent rootIntent) {
       try {
-        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancelAll();
+        if (inst != null) {
+          inst.runJs("window.__stop&&window.__stop()");
+        }
       } catch (Throwable t) {
       }
-      android.os.Process.killProcess(android.os.Process.myPid());
+      new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancelAll();
+          } catch (Throwable t) {
+          }
+          stopSelf();
+        }
+      }, 700);
     }
   }
 
@@ -84,5 +97,13 @@ public class MainActivity extends BridgeActivity {
       }
     } catch (Throwable t) {
     }
+  }
+
+  @Override
+  public void onDestroy() {
+    if (inst == this) {
+      inst = null;
+    }
+    super.onDestroy();
   }
 }
