@@ -52,13 +52,9 @@ public class MusicPlugin extends Plugin {
           MediaStore.Audio.Media.DATA
       };
       c = getContext().getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj,
-          MediaStore.Audio.Media.IS_MUSIC + " != 0", null, null);
+          "(" + MediaStore.Audio.Media.IS_MUSIC + " != 0 OR " + MediaStore.Audio.Media.DURATION + " >= 60000) AND " + MediaStore.Audio.Media.IS_RINGTONE + " = 0 AND " + MediaStore.Audio.Media.IS_ALARM + " = 0 AND " + MediaStore.Audio.Media.IS_NOTIFICATION + " = 0", null, null);
       if (c != null) {
         while (c.moveToNext()) {
-          String pth = c.getString(7);
-          if (pth != null && !new java.io.File(pth).exists()) {
-            continue;
-          }
           JSObject o = new JSObject();
           o.put("id", c.getLong(0));
           o.put("title", c.getString(1));
@@ -78,6 +74,20 @@ public class MusicPlugin extends Plugin {
       if (c != null) {
         c.close();
       }
+    }
+    try {
+      JSArray ok = new JSArray();
+      for (int i = 0; i < list.length(); i++) {
+        JSObject o = (JSObject) list.get(i);
+        String pth = o.optString("path", "");
+        if (pth.length() == 0 || new java.io.File(pth).exists()) {
+          ok.put(o);
+        }
+      }
+      if (ok.length() > 0) {
+        list = ok;
+      }
+    } catch (Throwable t) {
     }
     res.put("ok", true);
     res.put("list", list);
