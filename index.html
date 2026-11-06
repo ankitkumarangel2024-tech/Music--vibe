@@ -1514,7 +1514,7 @@ function applyDevice(list){
   tracks=tracks.filter(t=>!t.scan).concat(dev);
   byId=new Map(tracks.map(t=>[t.id,t]));
 }
-let scanSig='',scanBusy=false;
+let scanSig='',scanBusy=false,scanKnown=null;
 async function scanDevice(force){
   const P=MN();if(!P||scanBusy)return false;
   scanBusy=true;let r;
@@ -1525,8 +1525,19 @@ async function scanDevice(force){
   const sig=list.length+':'+list.reduce((a,o)=>(a*31+o.id)|0,7);
   if(sig===scanSig&&!force)return true;
   scanSig=sig;
+  let known=scanKnown;
+  if(!known){known=new Set();try{(JSON.parse(localStorage.getItem('jal.dev')||'[]')).forEach(o=>known.add(o.id))}catch(e){}}
+  const fresh=list.filter(o=>!known.has(o.id)).map(o=>2e9+o.id);
+  scanKnown=new Set(list.map(o=>o.id));
   try{localStorage.setItem('jal.dev',JSON.stringify(list))}catch(e){}
   applyDevice(list);
+  const addNew=()=>{
+    const ids=fresh.filter(id=>byId.has(id)&&!queue.includes(id));
+    if(!ids.length||known.size===0)return;
+    if(qi>=0)queue.splice(qi+1,0,...ids);else queue.push(...ids);
+    baseOrder.push(...ids);saveQueue();
+    toast(ids.length===1?'New song added':ids.length+' new songs added');
+  };
   if(qi>=0&&!curTrack()){
     /* the song that was playing is gone from the phone */
     const gone=queue[qi];
@@ -1536,6 +1547,7 @@ async function scanDevice(force){
     else if(tracks.length){buildQueue(tracks.map(t=>t.id),tracks[0].id);playAt(0,false)}
     else{qi=-1;saveQueue();$('#ttl').textContent='No song';$('#art-name').textContent='';$('#art').removeAttribute('src');$('#td').textContent='0:00';$('#tc').textContent='0:00';$('#fmt').hidden=true}
   }else if(qi>=0){queue=queue.filter(id=>byId.has(id));qi=queue.indexOf(curTrack().id);saveQueue()}
+  addNew();
   renderChips();if(view==='lib')renderList();else refresh();
   if(qi<0&&tracks.length){buildQueue(tracks.map(t=>t.id),tracks[0].id);qi=0;playAt(0,false)}
   return true;
