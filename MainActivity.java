@@ -95,6 +95,28 @@ public class MainActivity extends BridgeActivity {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     if (requestCode == REQ_AUDIO) {
       runJs("window.__aperm&&window.__aperm(" + hasAudioAccess() + ")");
+      askNotif();
+    }
+  }
+
+  boolean notifAsked = false;
+
+  public void askNotif() {
+    if (notifAsked || Build.VERSION.SDK_INT < 33) {
+      return;
+    }
+    if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED) {
+      return;
+    }
+    notifAsked = true;
+    requestPermissions(new String[] {"android.permission.POST_NOTIFICATIONS"}, 7742);
+  }
+
+  @Override
+  public void onResume() {
+    super.onResume();
+    if (hasAudioAccess()) {
+      askNotif();
     }
   }
 
