@@ -992,11 +992,19 @@ async function playAt(q,autoplay){
   lsSet('jal.last',t.id);
   if(autoplay){resumeCtx();audio.play().catch(()=>toast('Tap play to start'))}
   audio._want=!!autoplay;
-  if(mArt.has(t.id))setSession(t,mArt.get(t.id));refresh();wake();
+  setSession(t,null);refresh();wake();
   const a=await artFor(t);
   if(curTrack()!==t)return;
   curArt=a;$('#art').src=a.url;refresh();
-  mediaArt(t,a).then(m=>{if(curTrack()===t){setSession(t,m);setTimeout(()=>{if(curTrack()===t)setSession(t,m)},1500)}});
+  mediaArt(t,a).then(m=>{if(curTrack()===t){setSession(t,m);
+    /* the notification plugin builds the card before the cover is decoded: poke it again so it repaints with the new cover */
+    [700,2000].forEach(ms=>setTimeout(()=>{
+      if(curTrack()!==t)return;
+      try{const s=navigator.mediaSession,pl=!audio.paused;
+        if(pl){s.playbackState='paused';s.playbackState='playing'}
+        if(isFinite(audio.duration)&&audio.duration>0)s.setPositionState({duration:audio.duration,position:Math.min(audio.currentTime,audio.duration),playbackRate:audio.playbackRate||1});
+      }catch(e){}
+    },ms))}});
   preloadNext();
 }
 const mArt=new Map();
