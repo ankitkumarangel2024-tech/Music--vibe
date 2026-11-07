@@ -49,6 +49,20 @@ public class MainActivity extends BridgeActivity {
         @Override
         public void run() {
           try {
+            android.content.pm.PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), android.content.pm.PackageManager.GET_SERVICES);
+            if (pi.services != null) {
+              for (android.content.pm.ServiceInfo si : pi.services) {
+                if (si.name != null && !si.name.contains("KillService")) {
+                  try {
+                    stopService(new Intent().setClassName(getPackageName(), si.name));
+                  } catch (Throwable t) {
+                  }
+                }
+              }
+            }
+          } catch (Throwable t) {
+          }
+          try {
             ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancelAll();
           } catch (Throwable t) {
           }
