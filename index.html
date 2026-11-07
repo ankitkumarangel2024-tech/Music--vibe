@@ -992,11 +992,11 @@ async function playAt(q,autoplay){
   lsSet('jal.last',t.id);
   if(autoplay){resumeCtx();audio.play().catch(()=>toast('Tap play to start'))}
   audio._want=!!autoplay;
-  setSession(t,null);refresh();wake();
+  if(mArt.has(t.id))setSession(t,mArt.get(t.id));refresh();wake();
   const a=await artFor(t);
   if(curTrack()!==t)return;
   curArt=a;$('#art').src=a.url;refresh();
-  mediaArt(t,a).then(m=>{if(curTrack()===t)setSession(t,m)});
+  mediaArt(t,a).then(m=>{if(curTrack()===t){setSession(t,m);setTimeout(()=>{if(curTrack()===t)setSession(t,m)},1500)}});
   preloadNext();
 }
 const mArt=new Map();
