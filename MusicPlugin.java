@@ -206,6 +206,19 @@ public class MusicPlugin extends Plugin {
     call.resolve(res);
   }
 
+  /* opens this app's notification settings */
+  @PluginMethod
+  public void notifSettings(PluginCall call) {
+    try {
+      Intent i = new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+      i.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+      i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+      getContext().startActivity(i);
+    } catch (Throwable t) {
+    }
+    call.resolve();
+  }
+
   /* tells the page which notification code is really installed */
   @PluginMethod
   public void ver(PluginCall call) {
@@ -261,6 +274,7 @@ public class MusicPlugin extends Plugin {
         }
       }
     } catch (Throwable t) {
+      Svc.err = "np: " + t;
     }
   }
 
@@ -273,13 +287,19 @@ public class MusicPlugin extends Plugin {
     r.put("title", Svc.title);
     r.put("sig", Svc.sig);
     r.put("hasArt", Svc.art != null);
+    r.put("err", Svc.err);
+    try {
+      r.put("enabled", ((NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE)).areNotificationsEnabled());
+    } catch (Throwable t) {
+    }
+    r.put("fg", Svc.inst != null && Svc.inst.fg);
     call.resolve(r);
   }
 
   /* foreground media service: owns the MediaSession and the notification */
   public static class Svc extends Service {
     static Svc inst;
-    static String title = "", artist = "", sig = "", mid = "";
+    static String title = "", artist = "", sig = "", mid = "", err = "";
     static Bitmap art;
     static boolean playing;
     static long pos, dur;
@@ -395,6 +415,7 @@ public class MusicPlugin extends Plugin {
         }
         fg = true;
       } catch (Throwable t) {
+        err = "start: " + t;
       }
       lastFull = "";
       refresh();
@@ -450,6 +471,7 @@ public class MusicPlugin extends Plugin {
           nm.notify(ID, n);
         }
       } catch (Throwable t) {
+        err = "refresh: " + t;
       }
     }
 
