@@ -99,16 +99,18 @@ public class MainActivity extends BridgeActivity {
     }
   }
 
-  boolean notifAsked = false;
-
   public void askNotif() {
-    if (notifAsked || Build.VERSION.SDK_INT < 33) {
+    if (Build.VERSION.SDK_INT < 33) {
       return;
     }
     if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED) {
       return;
     }
-    notifAsked = true;
+    android.content.SharedPreferences sp = getSharedPreferences("mv", MODE_PRIVATE);
+    if (sp.getBoolean("notifAsked", false)) {
+      return;
+    }
+    sp.edit().putBoolean("notifAsked", true).apply();
     requestPermissions(new String[] {"android.permission.POST_NOTIFICATIONS"}, 7742);
   }
 

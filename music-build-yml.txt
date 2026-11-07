@@ -1,0 +1,67 @@
+name: Build Music Vibe APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Prepare project files
+        run: |
+          pick() { best=""; bt=-1; for f in $1; do [ -f "$f" ] || continue; t=$(git log -1 --format=%ct -- "$f" 2>/dev/null); t=${t:-0}; if [ "$t" -ge "$bt" ]; then best="$f"; bt=$t; fi; done; if [ -n "$best" ] && [ "$best" != "$2" ]; then cp "$best" "$2"; fi; }
+          pick 'index*.html' index.html
+          pick 'MainActivity*.java' MainActivity.java
+          pick 'MusicPlugin*.java' MusicPlugin.java
+          pick 'CrashApp*.java' CrashApp.java
+          pick 'patch_android*.py' patch_android.py
+          pick 'icon-192*.png' icon-192.png
+          pick 'icon-512*.png' icon-512.png
+          pick 'icon-maskable-512*.png' icon-maskable-512.png
+          ls -la
+          for f in index.html MainActivity.java MusicPlugin.java CrashApp.java patch_android.py mediasession-entry.js package.json capacitor.config.json; do
+            if [ ! -f "$f" ]; then echo "MISSING FILE: $f"; exit 1; fi
+          done
+      - name: Install packages and build web files
+        run: |
+          npm install || npm install
+          pip install pillow
+          mkdir -p www
+          cp index.html icon-192.png icon-512.png icon-maskable-512.png www/
+          grep -q mediasession.js www/index.html || sed -i 's|<body>|<body>\n<script src="mediasession.js"></script>|' www/index.html
+          sed -i '/requestPermissions/d' mediasession-entry.js
+          npx esbuild mediasession-entry.js --bundle --minify --outfile=www/mediasession.js
+      - name: Create Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Add app code and patch
+        run: |
+          APPID=$(python3 -c "import json;print(json.load(open('capacitor.config.json'))['appId'])")
+          DIR="android/app/src/main/java/$(echo $APPID | tr . /)"
+          mkdir -p "$DIR"
+          cp MainActivity.java MusicPlugin.java CrashApp.java "$DIR/"
+          sed -i "s/__PKG__/$APPID/" "$DIR/MainActivity.java" "$DIR/MusicPlugin.java" "$DIR/CrashApp.java"
+          python3 patch_android.py
+          head -30 android/app/src/main/AndroidManifest.xml
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleDebug || ./gradlew assembleDebug || ./gradlew assembleDebug
+      - name: Publish APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Music Vibe build ${{ github.run_number }}
+          files: android/app/build/outputs/apk/debug/app-debug.apk
