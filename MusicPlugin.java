@@ -206,6 +206,14 @@ public class MusicPlugin extends Plugin {
     call.resolve(res);
   }
 
+  /* tells the page which notification code is really installed */
+  @PluginMethod
+  public void ver(PluginCall call) {
+    JSObject r = new JSObject();
+    r.put("v", "svc2");
+    call.resolve(r);
+  }
+
   /* media notification: title, artist and cover always travel together in one call */
   @PluginMethod
   public void np(final PluginCall call) {
@@ -239,6 +247,7 @@ public class MusicPlugin extends Plugin {
         }
       }
       boolean playing = d.optBoolean("playing", false);
+      Svc.mid = d.optString("key", "");
       Svc.set(d.optString("title", ""), d.optString("artist", ""), bm, art.length() + ":" + art.hashCode(),
           playing, (long) d.optDouble("pos", 0), (long) d.optDouble("dur", 0));
       if (Svc.inst != null) {
@@ -255,10 +264,22 @@ public class MusicPlugin extends Plugin {
     }
   }
 
+  /* what the notification service holds right now (for the in-app check) */
+  @PluginMethod
+  public void npInfo(PluginCall call) {
+    JSObject r = new JSObject();
+    r.put("ver", "n2");
+    r.put("running", Svc.inst != null);
+    r.put("title", Svc.title);
+    r.put("sig", Svc.sig);
+    r.put("hasArt", Svc.art != null);
+    call.resolve(r);
+  }
+
   /* foreground media service: owns the MediaSession and the notification */
   public static class Svc extends Service {
     static Svc inst;
-    static String title = "", artist = "", sig = "";
+    static String title = "", artist = "", sig = "", mid = "";
     static Bitmap art;
     static boolean playing;
     static long pos, dur;
@@ -386,14 +407,19 @@ public class MusicPlugin extends Plugin {
             .putString(MediaMetadata.METADATA_KEY_TITLE, title)
             .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
             .putString(MediaMetadata.METADATA_KEY_ALBUM, "Music Vibe")
+            .putString(MediaMetadata.METADATA_KEY_MEDIA_ID, mid)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, title)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, artist)
             .putLong(MediaMetadata.METADATA_KEY_DURATION, dur);
         if (art != null) {
           mb.putBitmap(MediaMetadata.METADATA_KEY_ART, art);
           mb.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, art);
+          mb.putBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON, art);
         }
-        String key = title + "|" + artist + "|" + sig;
+        String key = mid + "|" + title + "|" + artist + "|" + sig;
         boolean metaChanged = !key.equals(lastKey);
         if (metaChanged) {
+          ms.setMetadata(null);
           ms.setMetadata(mb.build());
         }
         long acts = PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE

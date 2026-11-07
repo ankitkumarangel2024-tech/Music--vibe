@@ -318,7 +318,7 @@ body{background:radial-gradient(120% 70% at 50% -10%,hsl(220 60% 22%),#0b0d17 70
     <div class="mark">Music <span>Vibe</span></div>
     <div class="hr"><div class="chip glass" id="count">0 songs</div>
     <button class="chip glass" id="dots" aria-label="Menu" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>
-    <div id="dmenu" hidden><button id="m-ref">Refresh songs</button><button id="m-scan">Scan phone for songs</button></div>
+    <div id="dmenu" hidden><button id="m-ref">Refresh songs</button><button id="m-scan">Scan phone for songs</button><button id="m-chk">Check notification</button><div id="m-info" style="padding:8px 14px;font-size:12px;opacity:.6">...</div></div>
   </header>
 
   <main class="stage">
@@ -1018,7 +1018,7 @@ function setSession(t,art){
   let list=[];
   if(art)list=[art];
   else{try{list=[{src:new URL('icon-512.png',location.href).href,sizes:'512x512',type:'image/png'}]}catch(e){}}
-  try{navigator.mediaSession.metadata=new MediaMetadata({title:t.title,artist:t.artist||'Unknown artist',album:'Music Vibe',artwork:list})}catch(e){}
+  try{navigator.mediaSession.metadata=new MediaMetadata({title:t.title,artist:t.artist||'Unknown artist',album:'Music Vibe',artwork:list,tid:t.id})}catch(e){}
 }
 function next(auto){const n=peekNext(auto);if(n<0){audio.pause();audio.currentTime=0;refresh();return}playAt(n,true)}
 function prev(){
@@ -1068,6 +1068,7 @@ decks.forEach(d=>{
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&qi>=0)lsSet('jal.pos',audio.currentTime)});
 
 /* native media notification (own MediaSession): cover, title and state travel together */
+const jh=s=>{let x=0;for(let i=0;i<s.length;i++)x=(Math.imul(31,x)+s.charCodeAt(i))|0;return x};
 const NPl=()=>window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.MusicNative;
 if(window.Capacitor){
   window.__mh={};
@@ -1082,7 +1083,8 @@ if(window.Capacitor){
       const a=(md.artwork||[]).find(x=>x&&typeof x.src==='string'&&x.src.indexOf('data:')===0);
       if(a)art=a.src.split(',')[1]||'';
       const d=audio.duration;
-      P.np({title:md.title||'',artist:md.artist||'',art,playing:st==='playing',
+      window.__sent={title:md.title||'',sig:art.length+':'+jh(art)};
+      P.np({key:String(md.tid||''),title:md.title||'',artist:md.artist||'',art,playing:st==='playing',
         pos:Math.round((audio.currentTime||0)*1000),dur:isFinite(d)&&d>0?Math.round(d*1000):0});
     },40);
   };
@@ -1583,7 +1585,7 @@ async function scanDevice(force){
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)scanDevice()});
 setInterval(()=>{if(!document.hidden)scanDevice()},8000);
-$('#dots').onclick=e=>{e.stopPropagation();const m=$('#dmenu');m.hidden=!m.hidden};
+$('#dots').onclick=e=>{e.stopPropagation();const m=$('#dmenu');m.hidden=!m.hidden;if(!m.hidden){const P=MN();$('#m-info').textContent='Build n3 | notification: checking';if(P&&P.ver)P.ver().then(r=>{$('#m-info').textContent='Build n3 | notification: '+(r&&r.v||'?')}).catch(()=>{$('#m-info').textContent='Build n3 | notification: OLD (rebuild)'});else $('#m-info').textContent='Build n3 | notification: OLD (rebuild)'}};
 document.addEventListener('click',e=>{if(!e.target.closest('#dmenu'))$('#dmenu').hidden=true});
 async function manualScan(msg){
   $('#dmenu').hidden=true;toast(msg,true);
@@ -1592,6 +1594,16 @@ async function manualScan(msg){
   const ok=await scanDevice(true);
   toast(ok?tracks.length+(tracks.length===1?' song':' songs')+' found':'Allow music access to scan');
 }
+$('#m-chk').onclick=async()=>{
+  $('#dmenu').hidden=true;
+  const P=MN();
+  if(!P||!P.npInfo){toast('Old build: native notification is NOT installed',true);return}
+  try{
+    const r=await P.npInfo(),s=window.__sent||{};
+    const ok=r.running&&r.title===s.title&&r.sig===s.sig;
+    toast((ok?'OK: notification matches app':'MISMATCH')+' | app: '+(s.title||'-')+' | notification: '+(r.running?r.title:'not running')+(r.hasArt?' (cover)':' (no cover)'),true);
+  }catch(e){toast('Check failed')}
+};
 $('#m-ref').onclick=()=>manualScan('Refreshing...');
 $('#m-scan').onclick=()=>manualScan('Scanning phone...');
 window.__stop=()=>{decks.forEach(d=>{try{d.pause()}catch(e){}});try{navigator.mediaSession.playbackState='none';navigator.mediaSession.metadata=null}catch(e){}};
