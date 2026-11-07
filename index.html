@@ -1721,5 +1721,29 @@ decks.forEach((d,i)=>d.addEventListener('error',async()=>{
 })();
 })();
 </script>
+
+<script>
+/* Temporary Music Vibe native notification diagnostics */
+(function () {
+  let attempts = 0;
+  async function showMusicVibeNpInfo() {
+    attempts++;
+    try {
+      const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.MusicNative;
+      if (!plugin || typeof plugin.npInfo !== 'function') {
+        if (attempts < 8) return setTimeout(showMusicVibeNpInfo, 2000);
+        alert('Music Vibe Debug\nMusicNative.npInfo plugin/method nahi mila.');
+        return;
+      }
+      const result = await plugin.npInfo();
+      alert('Music Vibe Notification Debug\n\n' + JSON.stringify(result, null, 2) +
+        '\n\nIs popup ka screenshot bhej dein.');
+    } catch (error) {
+      alert('Music Vibe Debug Error\n' + String(error));
+    }
+  }
+  window.addEventListener('load', function () { setTimeout(showMusicVibeNpInfo, 15000); }, { once: true });
+})();
+</script>
 </body>
 </html>
