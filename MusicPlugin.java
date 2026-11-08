@@ -303,7 +303,7 @@ public class MusicPlugin extends Plugin {
     static Bitmap art;
     static boolean playing;
     static long pos, dur;
-    static final String CH = "mv_play";
+    static final String CH = "mv_play2";
     static final int ID = 4411;
     MediaSession ms;
     NotificationManager nm;
@@ -331,8 +331,15 @@ public class MusicPlugin extends Plugin {
       inst = this;
       nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
       if (Build.VERSION.SDK_INT >= 26) {
-        NotificationChannel c = new NotificationChannel(CH, "Music playback", NotificationManager.IMPORTANCE_LOW);
+        try {
+          nm.deleteNotificationChannel("mv_play");
+        } catch (Throwable t) {
+        }
+        NotificationChannel c = new NotificationChannel(CH, "Music playback", NotificationManager.IMPORTANCE_DEFAULT);
         c.setShowBadge(false);
+        c.setSound(null, null);
+        c.enableVibration(false);
+        c.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         nm.createNotificationChannel(c);
       }
       ms = new MediaSession(this, "MusicVibe");
@@ -368,6 +375,14 @@ public class MusicPlugin extends Plugin {
         }
       });
       ms.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+      try {
+        Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (open != null) {
+          ms.setSessionActivity(PendingIntent.getActivity(this, 5, open,
+              PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0)));
+        }
+      } catch (Throwable t) {
+      }
       ms.setActive(true);
     }
 
@@ -489,6 +504,8 @@ public class MusicPlugin extends Plugin {
             PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0)));
       }
       b.setDeleteIntent(act("close", 4));
+      b.setCategory(Notification.CATEGORY_TRANSPORT);
+      b.setOngoing(playing);
       b.setVisibility(Notification.VISIBILITY_PUBLIC);
       b.addAction(android.R.drawable.ic_media_previous, "Previous", act("prev", 1));
       b.addAction(playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,

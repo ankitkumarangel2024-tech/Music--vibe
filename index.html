@@ -1282,8 +1282,11 @@ function shown(){
   return base.filter(t=>(filter!=='fav'||favs.has(t.id))&&(!q||(t.title+' '+t.artist).toLowerCase().includes(q)));
 }
 let sel=null,selTarget=null,lpFired=false,pendingSel=null;
-function selOn(id,target){sel=new Set();if(id!=null)sel.add(id);selTarget=target||null;$('#list').classList.add('selmode');updSel();renderList()}
-function selOff(){sel=null;selTarget=null;$('#list').classList.remove('selmode');$('#selbar').hidden=true;renderList()}
+function selOn(id,target){sel=new Set();if(id!=null)sel.add(id);selTarget=target||null;$('#list').classList.add('selmode');try{history.pushState({v:'lib',sel:1},'')}catch(e){}updSel();renderList()}
+function selOff(fromPop){
+  const had=!!sel;sel=null;selTarget=null;$('#list').classList.remove('selmode');$('#selbar').hidden=true;renderList();
+  if(had&&!fromPop){try{if(history.state&&history.state.sel)history.back()}catch(e){}}
+}
 function selToggle(id,li){
   if(sel.has(id))sel.delete(id);else sel.add(id);
   li.classList.toggle('sel',sel.has(id));updSel();
@@ -1363,7 +1366,8 @@ document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
 window.addEventListener('popstate',e=>{
   const st=e.state||{};
-  if(sel&&!sheet){selOff();try{history.pushState({v:'lib'},'')}catch(x){}return}
+  if(sel&&!sheet){selOff(true);return}
+  if(st.sel&&!sel&&!sheet){try{history.back()}catch(x){}return}
   if(!st.s&&sheet)closeSheet(false,true);
   const want=st.v||'play';
   if(!sheet&&view!==want)show(want,true);
@@ -1719,30 +1723,6 @@ decks.forEach((d,i)=>d.addEventListener('error',async()=>{
   paintBands();estimate();wake();
   scanDevice();
 })();
-})();
-</script>
-
-<script>
-/* Temporary Music Vibe native notification diagnostics */
-(function () {
-  let attempts = 0;
-  async function showMusicVibeNpInfo() {
-    attempts++;
-    try {
-      const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.MusicNative;
-      if (!plugin || typeof plugin.npInfo !== 'function') {
-        if (attempts < 8) return setTimeout(showMusicVibeNpInfo, 2000);
-        alert('Music Vibe Debug\nMusicNative.npInfo plugin/method nahi mila.');
-        return;
-      }
-      const result = await plugin.npInfo();
-      alert('Music Vibe Notification Debug\n\n' + JSON.stringify(result, null, 2) +
-        '\n\nIs popup ka screenshot bhej dein.');
-    } catch (error) {
-      alert('Music Vibe Debug Error\n' + String(error));
-    }
-  }
-  window.addEventListener('load', function () { setTimeout(showMusicVibeNpInfo, 15000); }, { once: true });
 })();
 </script>
 </body>
