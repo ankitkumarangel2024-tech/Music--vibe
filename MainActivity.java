@@ -1,5 +1,6 @@
 package __PKG__;
 
+import androidx.activity.OnBackPressedCallback;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
@@ -18,6 +19,28 @@ public class MainActivity extends BridgeActivity {
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(MusicPlugin.class);
     super.onCreate(savedInstanceState);
+    getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+      @Override
+      public void handleOnBackPressed() {
+        try {
+          getBridge().getWebView().evaluateJavascript("(window.__back&&window.__back())?'1':'0'", new android.webkit.ValueCallback<String>() {
+            @Override
+            public void onReceiveValue(String v) {
+              if (v != null && v.contains("1")) {
+                return;
+              }
+              setEnabled(false);
+              getOnBackPressedDispatcher().onBackPressed();
+              setEnabled(true);
+            }
+          });
+        } catch (Throwable t) {
+          setEnabled(false);
+          getOnBackPressedDispatcher().onBackPressed();
+          setEnabled(true);
+        }
+      }
+    });
     inst = this;
     try {
       startService(new Intent(this, KillService.class));
